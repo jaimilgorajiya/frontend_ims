@@ -131,6 +131,10 @@ const VoiceAssistant = () => {
             case 'not-allowed':
               errorMessage = "Speech synthesis not allowed";
               break;
+            case 'interrupted':
+            case 'canceled':
+              // Speech was interrupted (e.g. by cancel() or new speech), this is expected.
+              return;
             default:
               errorMessage = `Speech error: ${event.error}`;
           }

@@ -3,8 +3,6 @@ import axios from 'axios'
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
-import { Canvas } from '@react-three/fiber'
-import { Stars, OrbitControls, Environment, useGLTF, Bounds, Center } from '@react-three/drei'
 import Shuffle from './Shuffle.js';
 import StockInPage from './pages/StockIn.jsx';
 import StockOutPage from './pages/StockOut.jsx';
@@ -14,10 +12,13 @@ import LoginPage from './pages/Login.jsx';
 import RegisterPage from './pages/Register.jsx';
 import ForgotPasswordPage from './pages/ForgotPassword.jsx';
 import ResetPasswordPage from './pages/ResetPassword.jsx';
+import AvailableProductsPage from './pages/AvailableProducts.jsx';
 import VoiceAssistant from './components/VoiceAssistant.jsx';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Package, TrendingUp, TriangleAlert, Activity, CircleCheck } from 'lucide-react';
 
 import './App.css'
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 function Navbar({ theme, toggleTheme }) {
   const navigate = useNavigate()
@@ -68,6 +69,7 @@ function Navbar({ theme, toggleTheme }) {
           <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>Home</NavLink>
           <NavLink to="/stock-in" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>Stock In</NavLink>
           <NavLink to="/stock-out" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>Stock Out</NavLink>
+          <NavLink to="/available-products" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>Available Products</NavLink>
           <NavLink to="/records" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>View Records</NavLink>
           <div className="nav-dropdown" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="nav-link nav-drop-btn" onClick={() => setReportsOpen((v) => !v)}>
@@ -113,19 +115,6 @@ function Navbar({ theme, toggleTheme }) {
   )
 }
 
-function Background3D({ theme }) {
-  return (
-    <div className="three-bg" aria-hidden>
-      <Canvas camera={{ position: [0, 0, 1] }} dpr={[1, 2]} gl={{ antialias: true }}>
-        <ambientLight intensity={theme === 'light' ? 0.9 : 0.6} />
-        {theme !== 'light' && (
-          <Stars radius={100} depth={50} count={4000} factor={3} saturation={0} fade speed={0.6} />
-        )}
-      </Canvas>
-    </div>
-  )
-}
-
 function BackgroundRipple() {
   const circles = [0, 1, 2, 3, 4]
   return (
@@ -143,51 +132,97 @@ function BackgroundRipple() {
   )
 }
 
-function Model({ color = '#7aa2ff', ...props }) {
-  const { scene } = useGLTF('/models/a_windy_day.glb')
-  const colored = React.useMemo(() => {
-    const root = scene.clone(true)
-    root.traverse((obj) => {
-      if (obj.isMesh && obj.material) {
-        const mat = obj.material.clone()
-        if (mat.color) mat.color.set(color)
-        if (mat.emissive) {
-          mat.emissive.set(color)
-          if (typeof mat.emissiveIntensity === 'number') mat.emissiveIntensity = Math.max(0.1, mat.emissiveIntensity)
-        }
-        obj.material = mat
-      }
-      if (obj.isPoints && obj.material) {
-        const pm = obj.material.clone()
-        if (pm.color) pm.color.set(color)
-        obj.material = pm
-      }
-    })
-    return root
-  }, [scene, color])
-  return <primitive object={colored} {...props} />
-}
+function HeroVisual() {
+  const [stats, setStats] = useState({ totalValue: 0, lowStock: 0, distinctItems: 0 })
+  const [loading, setLoading] = useState(true)
 
-function HeroModelCanvas({ theme }) {
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/stock/summary`)
+        if (res.data.success) {
+          const items = res.data.data || []
+          const totalValue = items.reduce((acc, item) => acc + (item.inventoryValue || 0), 0)
+          const lowStock = items.filter(item => item.availableQuantity < 10).length
+          setStats({ totalValue, lowStock, distinctItems: items.length })
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchStats()
+  }, [])
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val)
+  }
+
   return (
-    <div className="hero-model" aria-label="3D model">
-      <Canvas camera={{ fov: 45 }} dpr={[1, 2]}>
-        <ambientLight intensity={0.8} />
-        <React.Suspense fallback={null}>
-          <Bounds fit clip observe margin={0.95}>
-            <Center>
-              <Model color={theme === 'light' ? '#4f46e5' : '#7aa2ff'} />
-            </Center>
-          </Bounds>
-          <Environment preset="city" />
-        </React.Suspense>
-        <OrbitControls enablePan={false} enableZoom={false} enableDamping dampingFactor={0.08} autoRotate autoRotateSpeed={5} />
-      </Canvas>
+    <div className="hero-visual">
+      <div className="visual-glow" />
+      <motion.div 
+        className="visual-card main-card"
+        initial={{ opacity: 0, y: 30, rotateX: 10 }}
+        animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+      >
+        <div className="card-header">
+          <div className="card-icon-box"><Package size={22} color="#fff" /></div>
+          <div className="card-title">Total Inventory Value</div>
+        </div>
+        <div className="card-value">
+          {loading ? "..." : formatCurrency(stats.totalValue)}
+        </div>
+        <div className="card-stat positive">
+          <TrendingUp size={16} />
+          <span>Live Updates</span>
+        </div>
+        <div className="card-progress">
+          <div className="progress-bar" style={{ width: '100%' }} />
+        </div>
+      </motion.div>
+
+      <motion.div 
+        className="visual-card float-card card-1"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0, y: [0, -12, 0] }}
+        transition={{ 
+          opacity: { duration: 0.5, delay: 0.3 },
+          x: { duration: 0.5, delay: 0.3 },
+          y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.3 } 
+        }}
+      >
+        <div className={`float-icon ${stats.lowStock > 0 ? 'warning' : 'success'}`}>
+          {stats.lowStock > 0 ? <TriangleAlert size={18} /> : <CircleCheck size={18} />}
+        </div>
+        <div>
+          <div className="label">Low Stock</div>
+          <div className="value">{loading ? "..." : `${stats.lowStock} Items`}</div>
+        </div>
+      </motion.div>
+
+    
+      <motion.div 
+        className="visual-card float-card card-3"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1, y: [0, -8, 0] }}
+        transition={{ 
+          opacity: { duration: 0.5, delay: 0.7 },
+          scale: { duration: 0.5, delay: 0.7 },
+          y: { duration: 7, repeat: Infinity, ease: "easeInOut", delay: 0.7 } 
+        }}
+      >
+        <div className="float-icon info"><Activity size={18} /></div>
+        <div>
+          <div className="label">Unique Products</div>
+          <div className="value">{loading ? "..." : stats.distinctItems}</div>
+        </div>
+      </motion.div>
     </div>
   )
 }
-
-useGLTF.preload('/models/a_windy_day.glb')
 
 function Home({ theme }) {
   return (
@@ -221,7 +256,7 @@ function Home({ theme }) {
           <NavLink to="/stock-out" className="btn wide">Stock Out</NavLink>
         </div>
       </div>
-      <HeroModelCanvas theme={theme} />
+      <HeroVisual />
     </section>
   )
 }
@@ -303,7 +338,6 @@ function AppContent() {
 
   return (
     <>
-      <Background3D theme={theme} />
       {!isAuthPage && <BackgroundRipple />}
       {!isAuthPage && <Navbar theme={theme} toggleTheme={toggleTheme} />}
       <main className={isAuthPage ? 'container auth-container' : 'container'}>
@@ -315,6 +349,7 @@ function AppContent() {
           <Route path="/" element={<ProtectedRoute><Home theme={theme} /></ProtectedRoute>} />
           <Route path="/stock-in" element={<ProtectedRoute><StockInPage /></ProtectedRoute>} />
           <Route path="/stock-out" element={<ProtectedRoute><StockOutPage /></ProtectedRoute>} />
+          <Route path="/available-products" element={<ProtectedRoute><AvailableProductsPage /></ProtectedRoute>} />
           <Route path="/records" element={<ProtectedRoute><RecordsPage /></ProtectedRoute>} />
           <Route path="/reports/stock-in" element={<ProtectedRoute><ReportsPage filter="in" /></ProtectedRoute>} />
           <Route path="/reports/stock-out" element={<ProtectedRoute><ReportsPage filter="out" /></ProtectedRoute>} />
